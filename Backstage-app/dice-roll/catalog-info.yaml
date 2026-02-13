@@ -1,0 +1,19 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: dice-roller
+  description: Dice Roller service running on Azure Kubernetes
+  tags:
+    - go
+    - kubernetes
+    - azure
+    - aks
+    - platform
+  annotations:
+    backstage.io/kubernetes-id: dice-roller
+    backstage.io/kubernetes-namespace: default
+spec:
+  type: service
+  lifecycle: production
+  owner: rohit.borkar
+  system: azure-kubernetes
