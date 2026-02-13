@@ -15,5 +15,5 @@ metadata:
 spec:
   type: service
   lifecycle: production
-  owner: rohit.borkar
+  owner: user:default/rohit.borkar
   system: azure-kubernetes
