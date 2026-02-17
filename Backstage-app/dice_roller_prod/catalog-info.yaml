@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.component_id }}
+  description: ${{ values.description }}
+  tags: ${{ values.tags }}
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.component_id }}
+    backstage.io/kubernetes-namespace: ${{ values.namespace }}
+spec:
+  type: service
+  lifecycle: ${{ values.lifecycle }}
+  owner: ${{ values.owner }}
+  system: ${{ values.system }}
