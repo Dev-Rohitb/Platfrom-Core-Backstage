@@ -3,7 +3,8 @@ kind: Component
 metadata:
   name: ${{ values.component_id }}
   description: ${{ values.description }}
-  tags: ${{ values.tags }}
+  tags: 
+    - ${{ values.tags }}
   annotations:
     backstage.io/kubernetes-id: ${{ values.component_id }}
     backstage.io/kubernetes-namespace: ${{ values.namespace }}
