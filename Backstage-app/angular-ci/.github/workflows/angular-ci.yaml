@@ -1,0 +1,52 @@
+name: Angular CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ values.npmWorkingDir }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ values.nodeVersion }}
+          cache: npm
+          cache-dependency-path: ${{ values.npmWorkingDir }}/package-lock.json
+
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
+
+      - name: NPM cache clean
+        run: npm cache clean --force
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Angular CLI sanity
+        run: ${{ values.angularCliCommand }}
+
+      - name: Build application
+        run: ${{ values.buildCommand }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ values.artifactName }}
+          path: ${{ values.npmWorkingDir }}/${{ values.artifactPath }}
+          if-no-files-found: error
