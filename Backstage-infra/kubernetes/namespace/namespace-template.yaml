@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: k8s-namespace-create
   title: Create Kubernetes Namespace
-  description: Creates a Kubernetes namespace, publishes manifest to GitHub, and registers in Backstage.
+  description: Creates a Kubernetes namespace, publishes manifest repo, applies namespace to cluster, and registers in Backstage.
   tags: ['kubernetes', 'namespace', 'platform']
 spec:
   owner: group:backstage
@@ -14,13 +14,30 @@ spec:
       required:
         - namespace
         - owner
+        - repoUrl
       properties:
         namespace:
-          title: Kubernetes Namespace
+          title: Kubernetes Namespace Name
           type: string
-          description: Name of the namespace to create (e.g. payments-dev)
+          description: Namespace to create (e.g. payments-dev)
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           ui:autofocus: true
+
+        description:
+          title: Description
+          type: string
+          default: Kubernetes namespace managed by Backstage
+
+        lifecycle:
+          title: Lifecycle
+          type: string
+          enum: [experimental, production]
+          default: production
+
+        system:
+          title: System
+          type: string
+          default: kubernetes-platform
 
         owner:
           title: Owner
@@ -31,26 +48,6 @@ spec:
             catalogFilter:
               kind: [Group, User]
 
-        system:
-          title: System (optional)
-          type: string
-          default: kubernetes-platform
-
-        lifecycle:
-          title: Lifecycle
-          type: string
-          enum: [experimental, production]
-          default: production
-
-        description:
-          title: Description
-          type: string
-          default: Kubernetes namespace managed by Backstage
-
-    - title: Choose a Repository Location
-      required:
-        - repoUrl
-      properties:
         repoUrl:
           title: Repository Location
           type: string
@@ -66,13 +63,14 @@ spec:
       name: Fetch skeleton
       action: fetch:template
       input:
-        url: https://github.com/DevopsBackstageSME/AWS-template/tree/main/skeleton/k8s-namespace/
+        # update this URL to your template repo skeleton path
+        url: https://github.com/Dev-Rohitb/Platfrom-Core-Backstage/tree/master/Backstage-infra/kubernetes/namespace/skeleton/k8s-namespace/
         values:
           namespace: ${{ parameters.namespace }}
-          owner: ${{ parameters.owner }}
-          system: ${{ parameters.system }}
-          lifecycle: ${{ parameters.lifecycle }}
           description: ${{ parameters.description }}
+          lifecycle: ${{ parameters.lifecycle }}
+          system: ${{ parameters.system }}
+          owner: ${{ parameters.owner }}
           repoUrl: ${{ parameters.repoUrl }}
 
     - id: publish
@@ -84,13 +82,19 @@ spec:
         repoVisibility: private
         defaultBranch: main
 
-    # Deploy namespace from the generated repo content (local workspace path)
     - id: deploy
       name: Create namespace on cluster
       action: kube:apply
       input:
-        files:
-          - ./k8s/namespace.yaml
+        namespaced: false
+        manifest: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: ${{ parameters.namespace }}
+            labels:
+              managed-by: backstage
+              name: ${{ parameters.namespace }}
 
     - id: register
       name: Register in catalog
@@ -107,3 +111,7 @@ spec:
       - title: Open in catalog
         icon: catalog
         entityRef: ${{ steps['register'].output.entityRef }}
+
+
+
+
