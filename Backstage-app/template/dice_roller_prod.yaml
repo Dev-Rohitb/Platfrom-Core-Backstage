@@ -1,0 +1,218 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: dice-roller-k8s
+  title: Dice Roller - Create Repo + Deploy (kube:apply)
+  description: Creates Dice Roller repo from skeleton, deploys to Kubernetes using kube:apply, and registers in Backstage.
+  tags: ['kubernetes', 'aks', 'azure', 'sample-app']
+spec:
+  owner: group:backstage
+  type: service
+
+  parameters:
+    - title: Dice Roller Details
+      required:
+        - component_id
+        - owner
+        - lifecycle
+        - system
+      properties:
+        component_id:
+          title: Component Name
+          type: string
+          description: Repo name + k8s resource name (e.g. dice-roller)
+          pattern: '^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$'
+          ui:autofocus: true
+
+        description:
+          title: Description
+          type: string
+          default: Dice Roller service running on Azure Kubernetes
+
+        tags:
+          title: Tags
+          type: array
+          items:
+            type: string
+          default: [go, kubernetes, azure, aks, platform]
+
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              kind: [Group, User]
+
+        lifecycle:
+          title: Lifecycle
+          type: string
+          enum: [experimental, production]
+          default: production
+
+        system:
+          title: System
+          type: string
+          default: azure-kubernetes
+
+    - title: Kubernetes Deployment Details
+      required:
+        - clusterName
+        - namespace
+        - image
+      properties:
+        clusterName:
+          title: Target Cluster
+          type: string
+          description: Must match a configured Kubernetes cluster name in Backstage app-config
+          enum:
+            - aks-pe-platform-core
+            - aks-dev
+            - aks-qa
+            - aks-prod
+
+        namespace:
+          title: Kubernetes Namespace
+          type: string
+          default: default
+
+        replicas:
+          title: Replicas
+          type: number
+          default: 2
+          minimum: 1
+
+        image:
+          title: Container Image
+          type: string
+          default: nginx:1.14.2
+
+        containerPort:
+          title: Container Port
+          type: number
+          default: 80
+
+        serviceType:
+          title: Service Type
+          type: string
+          enum: [ClusterIP, LoadBalancer]
+          default: LoadBalancer
+
+    - title: Choose a Repository Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Location of the repository
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+            allowedOwners:
+              - DevopsPlatformEngineering
+
+  steps:
+    # 1) Fetch skeleton (catalog-info.yaml + k8s/ file etc) and render placeholders
+    - id: fetch-base
+      name: Fetching Details from content folder
+      action: fetch:template
+      input:
+        # Put your skeleton in a template repo like EC2 template.
+        # Example: https://github.com/DevopsBackstageSME/Platform-templates/tree/main/skeleton/dice-roller/
+        url: https://github.com/Dev-Rohitb/Platfrom-Core-Backstage/blob/master/Backstage-app/dice_roller_prod/
+        values:
+          component_id: ${{ parameters.component_id }}
+          description: ${{ parameters.description }}
+          tags: ${{ parameters.tags }}
+          owner: ${{ parameters.owner }}
+          lifecycle: ${{ parameters.lifecycle }}
+          system: ${{ parameters.system }}
+          namespace: ${{ parameters.namespace }}
+
+    # 2) Publish repo
+    - id: publish
+      name: Publishing Details
+      action: publish:github
+      input:
+        description: This repo deploys ${{ parameters.component_id }} to Kubernetes using Backstage scaffolder.
+        repoUrl: ${{ parameters.repoUrl }}
+        repoVisibility: 'private'
+        defaultBranch: 'main'
+
+    # 3) Deploy (inline manifest) using @devangelista/backstage-scaffolder-kubernetes
+    - id: deploy
+      name: Deploying to Kubernetes (kube:apply)
+      action: kube:apply
+      input:
+        clusterName: ${{ parameters.clusterName }}
+        namespaced: true
+        manifest: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${{ parameters.component_id }}
+            namespace: ${{ parameters.namespace }}
+            labels:
+              backstage.io/kubernetes-id: ${{ parameters.component_id }}
+              app: ${{ parameters.component_id }}
+          spec:
+            selector:
+              matchLabels:
+                app: ${{ parameters.component_id }}
+            replicas: ${{ parameters.replicas }}
+            template:
+              metadata:
+                labels:
+                  app: ${{ parameters.component_id }}
+                  backstage.io/kubernetes-id: ${{ parameters.component_id }}
+              spec:
+                containers:
+                  - name: app
+                    image: ${{ parameters.image }}
+                    args:
+                      - bash
+                      - -c
+                      - yes > /dev/null & yes > /dev/null & yes > /dev/null
+                    resources:
+                      requests:
+                        memory: "64Mi"
+                        cpu: "50m"
+                      limits:
+                        memory: "128Mi"
+                        cpu: "50m"
+                    ports:
+                      - containerPort: ${{ parameters.containerPort }}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${{ parameters.component_id }}
+            namespace: ${{ parameters.namespace }}
+            labels:
+              backstage.io/kubernetes-id: ${{ parameters.component_id }}
+          spec:
+            type: ${{ parameters.serviceType }}
+            selector:
+              app: ${{ parameters.component_id }}
+            ports:
+              - name: http
+                port: 80
+                targetPort: ${{ parameters.containerPort }}
+
+    # 4) Register catalog entity
+    - id: register
+      name: Registering the new Component
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+        optional: true
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

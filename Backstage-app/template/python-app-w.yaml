@@ -1,0 +1,125 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: python-docker-app
+  title: Python App (Docker Build & Push)
+  description: Creates a Python Flask app with Dockerfile + GitHub Actions CI to build and push image to Docker Hub, then registers in Backstage.
+  tags: ['python', 'flask', 'docker', 'github-actions', 'ci']
+spec:
+  owner: group:backstage
+  type: service
+
+  parameters:
+    - title: App Details
+      required:
+        - component_id
+        - owner
+        - lifecycle
+        - dockerhubUser
+      properties:
+        component_id:
+          title: Component / Repo Name
+          type: string
+          description: Name for repo and Backstage component (e.g. python-orders-api)
+          pattern: '^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$'
+          ui:autofocus: true
+
+        description:
+          title: Description
+          type: string
+          default: Python Flask app with Docker CI/CD via GitHub Actions
+
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              kind: [Group, User]
+
+        lifecycle:
+          title: Lifecycle
+          type: string
+          enum: [experimental, production]
+          default: production
+
+        system:
+          title: System (optional)
+          type: string
+          default: platform
+
+        port:
+          title: App Port
+          type: integer
+          default: 8080
+
+        dockerhubUser:
+          title: Docker Hub Username/Org
+          type: string
+          description: Docker Hub namespace (e.g. yashdevops or rohitborkar)
+
+        imageName:
+          title: Docker Image Name
+          type: string
+          description: Image repo name (default = component_id)
+          default: ""
+
+    - title: Choose a Repository Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+            allowedOwners:
+              - DevopsPlatformEngineering
+
+  steps:
+    - id: fetch-base
+      name: Fetching skeleton
+      action: fetch:template
+      input:
+        # Update this URL to your actual template repo path
+        # Example:
+        # https://github.com/DevopsBackstageSME/AWS-template/tree/main/skeleton/python-docker-app/
+        url: https://github.com/DevopsBackstageSME/AWS-template/tree/main/skeleton/python-docker-app/
+        values:
+          component_id: ${{ parameters.component_id }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          lifecycle: ${{ parameters.lifecycle }}
+          system: ${{ parameters.system }}
+          port: ${{ parameters.port }}
+          dockerhubUser: ${{ parameters.dockerhubUser }}
+          imageName: ${{ parameters.imageName }}
+          repoUrl: ${{ parameters.repoUrl }}
+
+    - id: publish
+      name: Publishing to GitHub
+      action: publish:github
+      input:
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        repoVisibility: 'private'
+        defaultBranch: 'main'
+
+    - id: register
+      name: Registering in Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+        optional: true
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

@@ -1,0 +1,162 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: angular-ci-github-actions
+  title: Angular App CI (GitHub Actions)
+  description: Creates an Angular app repo with a standard GitHub Actions CI workflow and registers it in Backstage.
+  tags: ['angular', 'github-actions', 'ci', 'node', 'frontend']
+spec:
+  owner: group:backstage
+  type: service
+
+  parameters:
+    - title: Component Details
+      required:
+        - component_id
+        - owner
+        - lifecycle
+      properties:
+        component_id:
+          title: Component Name
+          type: string
+          description: Repo name + Backstage component name (e.g. my-angular-app)
+          pattern: '^[a-z0-9]([a-z0-9\\-]*[a-z0-9])?$'
+          ui:autofocus: true
+
+        description:
+          title: Description
+          type: string
+          default: Angular application with CI using GitHub Actions
+
+        tags:
+          title: Tags
+          type: array
+          items:
+            type: string
+          default: [angular, frontend, ci, github-actions]
+
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component
+          ui:field: OwnerPicker
+          ui:options:
+            allowArbitraryValues: false
+            catalogFilter:
+              kind: [Group, User]
+
+        lifecycle:
+          title: Lifecycle
+          type: string
+          enum: [experimental, production]
+          default: production
+
+        system:
+          title: System (optional)
+          type: string
+          description: Backstage System name (if you use Systems)
+          default: web-platform
+
+    - title: CI Defaults (single app in repo root)
+      required:
+        - nodeVersion
+        - buildCommand
+        - artifactPath
+      properties:
+        nodeVersion:
+          title: Node.js Version
+          type: string
+          default: "18.x"
+
+        npmWorkingDir:
+          title: NPM Working Directory
+          type: string
+          description: Keep '.' for single app at repo root
+          default: "."
+
+        angularCliCommand:
+          title: Angular CLI Command
+          type: string
+          description: Optional sanity check command
+          default: "npx ng version"
+
+        buildCommand:
+          title: Build Command
+          type: string
+          default: "npm run build -- --configuration=production"
+
+        artifactName:
+          title: Artifact Name
+          type: string
+          default: "dist"
+
+        artifactPath:
+          title: Artifact Path
+          type: string
+          description: Default Angular build output folder
+          default: "dist"
+
+    - title: Choose a Repository Location
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+            allowedOwners:
+              - DevopsPlatformEngineering
+
+  steps:
+    - id: fetch-base
+      name: Fetching Details from content folder
+      action: fetch:template
+      input:
+        # Put this skeleton in a dedicated templates repo (recommended).
+        # Example:
+        # https://github.com/DevopsBackstageSME/AWS-template/tree/main/skeleton/angular-ci/
+        url: https://github.com/Dev-Rohitb/Platfrom-Core-Backstage/blob/master/Backstage-app/angular-ci/
+        values:
+          component_id: ${{ parameters.component_id }}
+          description: ${{ parameters.description }}
+          tags: ${{ parameters.tags }}
+          owner: ${{ parameters.owner }}
+          lifecycle: ${{ parameters.lifecycle }}
+          system: ${{ parameters.system }}
+
+          nodeVersion: ${{ parameters.nodeVersion }}
+          npmWorkingDir: ${{ parameters.npmWorkingDir }}
+          angularCliCommand: ${{ parameters.angularCliCommand }}
+          buildCommand: ${{ parameters.buildCommand }}
+          artifactName: ${{ parameters.artifactName }}
+          artifactPath: ${{ parameters.artifactPath }}
+
+          repoUrl: ${{ parameters.repoUrl }}
+
+    - id: publish
+      name: Publishing Details
+      action: publish:github
+      input:
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        repoVisibility: 'private'
+        defaultBranch: 'main'
+
+    - id: register
+      name: Registering the new Component
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish'].output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+        optional: true
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps['publish'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}
